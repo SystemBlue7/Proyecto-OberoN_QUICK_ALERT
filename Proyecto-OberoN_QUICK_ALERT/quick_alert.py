@@ -9,6 +9,13 @@ from PIL import Image, ImageTk
 import win32com.client
 import pyodbc
 
+# FUNCIÓN PARA RUTAS CORRECTAS EN .PY Y .EXE
+def resource_path(relative_path):
+    import sys, os
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
 # ---------------------------------------------
 # MAPA CIUDAD → MUNICIPIOS
 # ---------------------------------------------
@@ -306,11 +313,24 @@ class AppBoletin(tk.Tk):
 
     def _clear_entry_on_click(self, event):
         widget = event.widget
-        if isinstance(widget, ttk.Entry):
-            valor = widget.get()
-            # NO borrar si es el texto por defecto
-            if valor.strip() != "Boletín No.":
-                widget.delete(0, tk.END)
+        if not isinstance(widget, ttk.Entry):
+            return
+
+        texto_actual = widget.get().strip()
+
+        # Si está vacío, restaurar el placeholder
+        if texto_actual == "":
+            widget.delete(0, tk.END)
+            widget.insert(0, "Boletín No.")
+            return
+
+        # Si tiene el placeholder, no borrar
+        if texto_actual == "Boletín No.":
+            return
+
+        # Si tiene texto del usuario, borrarlo
+        widget.delete(0, tk.END)
+
 
 
     def _clear_text_on_click(self, event):
@@ -627,7 +647,7 @@ class AppBoletin(tk.Tk):
         )
             return
 
-        var.set(ruta)
+        var.set(os.path.abspath(ruta))
         self._validar_requisitos()
 
     def _make_responsive(self):
@@ -766,16 +786,32 @@ class AppBoletin(tk.Tk):
             ubicacion = self.var_ubicacion.get()
             titulo = self.var_titulo.get()
 
-            # Extraer solo el nombre del archivo del cabezote
-            ruta_cabezote = self.var_cabezote.get()
-            # Obtener nombre del archivo sin extensión
-            nombre_cabezote = os.path.splitext(os.path.basename(ruta_cabezote))[0]
+            # Ruta ORIGINAL para obtener el nombre correcto (no cambia en EXE)
+            ruta_original = self.var_cabezote.get()
+            print("DEBUG NOMBRE ARCHIVO:", ruta_original)
 
-            # Quitar la última palabra
-            partes = nombre_cabezote.split()
+
+            # Nombre sin extensión
+            nombre_cabezote = os.path.splitext(os.path.basename(ruta_original))[0]
+            print("DEBUG NOMBRE SIN EXT:", nombre_cabezote)
+
+            # === ELIMINAR SOLO LA PALABRA "BLANCO" ===
+            nombre_cabezote = nombre_cabezote.replace("BLANCO", "")
+            nombre_cabezote = nombre_cabezote.replace("Blanco", "")
+            nombre_cabezote = nombre_cabezote.replace("blanco", "")
+
+            # Limpieza de espacios dobles que puedan quedar
+            nombre_cabezote = " ".join(nombre_cabezote.split())
+
+
+
+            # Quitar la última parte separada por "_"
+            partes = nombre_cabezote.split("_")
             if len(partes) > 1:
-                nombre_cabezote = " ".join(partes[:-1])
+                nombre_cabezote = "_".join(partes[:-1])
 
+            # Ruta CORRECTA para que el EXE acceda al archivo
+            ruta_cabezote = resource_path(ruta_original)
 
             texto_principal = self.txt_principal.get("1.0", "end-1c")
             impacto = self.var_impacto.get()

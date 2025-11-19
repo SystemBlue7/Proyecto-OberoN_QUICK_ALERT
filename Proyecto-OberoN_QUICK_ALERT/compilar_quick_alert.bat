@@ -40,8 +40,7 @@ echo [INFO] Compilando quick_alert.py a EXE con ícono personalizado...
 echo.
 
 python -m PyInstaller --noconfirm --onefile --windowed ^
- --icon "Logo.ico" ^
- --add-data "Logo.ico;." ^
+ --add-data "O-PEQUEÑA.ico;." ^
  --add-data "Logo.png;." ^
  --add-data "ICONOGRAFIA;ICONOGRAFIA" ^
  --add-data "CABEZOTES;CABEZOTES" ^

@@ -8,89 +8,49 @@ from pptx.util import Cm, Pt
 from PIL import Image, ImageTk
 import win32com.client
 import pyodbc
+import json
+
+import json
+
+# ==========================================================
+# COMBOBOX CON BÚSQUEDA (AUTOCOMPLETE)
+# ==========================================================
+class AutocompleteCombobox(ttk.Combobox):
+    def set_completion_list(self, completion_list):
+        self._completion_list = sorted(completion_list, key=str.lower)
+        self.bind('<KeyRelease>', self._handle_keyrelease)
+        self['values'] = self._completion_list
+
+    def _autocomplete(self, typed):
+        return [w for w in self._completion_list if typed.lower() in w.lower()]
+
+    def _handle_keyrelease(self, event):
+        if event.keysym in ("BackSpace", "Left", "Right"):
+            typed = self.get()
+        else:
+            typed = self.get() + event.char
+        
+        matches = self._autocomplete(typed)
+        if matches:
+            self['values'] = matches
+        else:
+            self['values'] = self._completion_list
+
 
 # FUNCIÓN PARA RUTAS CORRECTAS EN .PY Y .EXE
 def resource_path(relative_path):
     import sys, os
     if hasattr(sys, "_MEIPASS"):
         return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
+    return os.path.join(os.path.dirname(__file__), relative_path)
 
 # ---------------------------------------------
-# MAPA CIUDAD → MUNICIPIOS
+# CARGAR JSON DE DEPARTAMENTOS → CIUDADES
 # ---------------------------------------------
-MUNICIPIOS_POR_CIUDAD = {
-    "Bogotá": [
-        "Bogotá", "Soacha", "Chía", "Zipaquirá", "Cajicá", "Funza", "Mosquera",
-        "Madrid", "Facatativá", "La Calera", "Sopó", "Cota", "Tenjo",
-        "Guasca", "Guatavita", "Tabio", "Subachoque"
-    ],
-    "Medellín": [
-        "Medellín", "Envigado", "Itagüí", "Bello", "Sabaneta", "La Estrella",
-        "Caldas", "Copacabana", "Girardota", "Barbosa"
-    ],
-    "Cali": [
-        "Cali", "Palmira", "Yumbo", "Jamundí", "Candelaria", "Florida",
-        "Pradera"
-    ],
-    "Barranquilla": [
-        "Barranquilla", "Soledad", "Malambo", "Galapa", "Puerto Colombia"
-    ],
-    "Cartagena": [
-        "Cartagena", "Turbaco", "Arjona", "Santa Rosa", "Turbana", "Clemencia"
-    ],
-    "Cúcuta": [
-        "Cúcuta", "Villa del Rosario", "Los Patios", "El Zulia", "San Cayetano"
-    ],
-    "Bucaramanga": [
-        "Bucaramanga", "Floridablanca", "Girón", "Piedecuesta", "Lebrija"
-    ],
-    "Pereira": [
-        "Pereira", "Dosquebradas", "La Virginia", "Santa Rosa de Cabal"
-    ],
-    "Santa Marta": [
-        "Santa Marta", "Ciénaga", "Zona Bananera"
-    ],
-    "Ibagué": [
-        "Ibagué", "Espinal", "Cajamarca", "Alvarado", "Piedras"
-    ],
-    "Villavicencio": [
-        "Villavicencio", "Acacías", "Restrepo", "Cumaral", "Guamal"
-    ],
-    "Tunja": [
-        "Tunja", "Sogamoso", "Duitama", "Paipa"
-    ],
-    "Valledupar": [
-        "Valledupar", "La Paz", "Codazzi", "San Diego", "Manaure"
-    ],
-    "Florencia": [
-        "Florencia", "La Montañita", "Morelia", "Milán"
-    ],
-    "Quibdó": [
-        "Quibdó", "Lloró", "Yuto", "Bojayá"
-    ],
-    "Neiva": [
-        "Neiva", "Rivera", "Campoalegre", "Tello", "Aipe"
-    ],
-    "Manizales": [
-        "Manizales", "Villamaría", "Chinchiná", "Neira"
-    ],
-    "Pasto": [
-        "Pasto", "Tangua", "Yacuanquer", "Chachagüí"
-    ],
-    "Montería": [
-        "Montería", "Cereté", "San Pelayo", "Ciénaga de Oro"
-    ],
-    "Sincelejo": [
-        "Sincelejo", "Corozal", "Morroa", "Los Palmitos"
-    ],
-    "Popayán": [
-        "Popayán", "Timbío", "Cajibío", "El Tambo"
-    ]
-}
+ruta_json = resource_path("departamentos_ciudades.json")
 
-CIUDADES_COLOMBIA = list(MUNICIPIOS_POR_CIUDAD.keys())
-
+with open(ruta_json, "r", encoding="utf-8") as f:
+    CIUDADES_POR_DEPARTAMENTO = json.load(f)
 
 
 # ----------------------------------------------------------
@@ -251,7 +211,7 @@ class AppBoletin(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Boletín Oberon (v10.0)")
-        self.geometry("900x768")
+        self.geometry("900x685")
 
         # Ícono personalizado compatible con EXE
         # Ícono personalizado compatible con ejecución normal y .exe
@@ -300,8 +260,8 @@ class AppBoletin(tk.Tk):
 
         self.var_impacto = tk.StringVar(value="Impacto del evento en la movilidad y la seguridad vial.")
         
+        self.var_departamento = tk.StringVar(value="Cundinamarca")
         self.var_ciudad = tk.StringVar(value="Bogotá")
-        self.var_municipio = tk.StringVar(value="Bogotá")
 
         
 
@@ -338,16 +298,16 @@ class AppBoletin(tk.Tk):
         if isinstance(widget, scrolledtext.ScrolledText):
             widget.delete("1.0", tk.END)
             
-    def _actualizar_municipios(self, *args):
-        ciudad = self.var_ciudad.get()
-        municipios = MUNICIPIOS_POR_CIUDAD.get(ciudad, [])
-
-        self.combo_municipio["values"] = municipios
-
-        if municipios:
-            self.var_municipio.set(municipios[0])
+    def _actualizar_ciudades(self, *args):
+        departamento = self.var_departamento.get()
+        ciudades = CIUDADES_POR_DEPARTAMENTO.get(departamento, [])
+        self.combo_ciudad.set_completion_list(ciudades)
+        if ciudades:
+            self.var_ciudad.set(ciudades[0])
         else:
-            self.var_municipio.set("")
+            self.var_ciudad.set("")
+
+
 
 
     # ----------------- ESTILOS -----------------
@@ -469,9 +429,15 @@ class AppBoletin(tk.Tk):
 
         left = ttk.Frame(cont)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        left.columnconfigure(0, weight=1)
+
 
         right = ttk.Frame(cont)
         right.grid(row=0, column=1, sticky="nsew")
+        right.columnconfigure(0, weight=1)
+        for i in range(12):
+            right.rowconfigure(i, weight=1)
+
 
         self._all_frames.extend([cont, left, right])
 
@@ -484,40 +450,60 @@ class AppBoletin(tk.Tk):
         except Exception:
             pass
         
-        # ----- Ciudad y Municipio en una sola línea -----
+        # ----- Departamento / Ciudad / Riesgo alineados y CENTRADOS -----
         frame_lugares = ttk.Frame(left)
         frame_lugares.pack(fill=tk.X, pady=(6, 7))
 
-        # Ciudad
-        ttk.Label(frame_lugares, text="Ciudad:").grid(row=0, column=0, sticky="w", padx=(110, 5))
+        # Hacemos que las columnas se expandan uniforme
+        frame_lugares.columnconfigure(0, weight=1)
+        frame_lugares.columnconfigure(1, weight=1)
+        frame_lugares.columnconfigure(2, weight=1)
 
-        self.combo_ciudad = ttk.Combobox(
+        # --- Departamento ---
+        ttk.Label(frame_lugares, text="Departamento:").grid(row=0, column=0, sticky="n", pady=(0, 2))
+
+        self.combo_departamento = AutocompleteCombobox(
+            frame_lugares,
+            textvariable=self.var_departamento,
+            values=list(CIUDADES_POR_DEPARTAMENTO.keys()),
+            state="normal",
+            width=18,
+            style="Lugar.TCombobox"
+        )
+        self.combo_departamento.grid(row=1, column=0, sticky="n", padx=10)
+        self.combo_departamento.set_completion_list(list(CIUDADES_POR_DEPARTAMENTO.keys()))
+        self.combo_departamento.bind("<<ComboboxSelected>>", self._actualizar_ciudades)
+
+        # --- Ciudad ---
+        ttk.Label(frame_lugares, text="Ciudad:").grid(row=0, column=1, sticky="n", pady=(0, 2))
+
+        self.combo_ciudad = AutocompleteCombobox(
             frame_lugares,
             textvariable=self.var_ciudad,
-            values=list(MUNICIPIOS_POR_CIUDAD.keys()),
+            values=[],
             state="readonly",
-            width=22,
+            width=18,
             style="Lugar.TCombobox"
         )
+        self.combo_ciudad.grid(row=1, column=1, sticky="n", padx=10)
+        self._actualizar_ciudades()
+        self.combo_ciudad.set_completion_list(CIUDADES_POR_DEPARTAMENTO.get(self.var_departamento.get(), []))
+        self.var_ciudad.set("Bogotá")
 
+        # --- Riesgo ---
+        ttk.Label(frame_lugares, text="Riesgo:").grid(row=0, column=2, sticky="n", pady=(0, 2))
 
-        self.combo_ciudad.grid(row=0, column=1, sticky="w", pady=2)
-        self.combo_ciudad.bind("<<ComboboxSelected>>", self._actualizar_municipios)
-
-
-        # Municipio
-        ttk.Label(frame_lugares, text="Municipio:").grid(row=0, column=2, sticky="w", padx=(50, 5))
-
-        self.combo_municipio = ttk.Combobox(
+        self.var_riesgo = tk.StringVar(value="Bajo")
+        self.combo_riesgo = ttk.Combobox(
             frame_lugares,
-            textvariable=self.var_municipio,
-            values=MUNICIPIOS_POR_CIUDAD.get(self.var_ciudad.get(), []),
+            textvariable=self.var_riesgo,
+            values=["Bajo", "Medio", "Alto"],
             state="readonly",
-            width=22,
+            width=15,
             style="Lugar.TCombobox"
         )
+        self.combo_riesgo.grid(row=1, column=2, sticky="n", padx=10)
 
-        self.combo_municipio.grid(row=0, column=3, sticky="w", pady=2)
 
         self.f_ubic = self._fila_entry(left, "Ubicación:", self.var_ubicacion)
         ttk.Button(left, text="Seleccionar ícono (Ubicación)", style="Primary.TButton",
@@ -532,7 +518,7 @@ class AppBoletin(tk.Tk):
                    command=self._seleccionar_icono_boletin).pack(pady=4)
 
         ttk.Label(left, text="Texto principal:").pack(anchor="w", pady=(8, 2))
-        self.txt_principal = scrolledtext.ScrolledText(left, height=6, wrap=tk.WORD, fg="#A9A9A9")
+        self.txt_principal = scrolledtext.ScrolledText(left, height=4, wrap=tk.WORD, fg="#A9A9A9")
         self.txt_principal.bind("<Button-1>", self._clear_text_on_click)
         self.txt_principal.pack(fill=tk.X)
         self.txt_principal.insert(tk.END,
@@ -544,7 +530,7 @@ class AppBoletin(tk.Tk):
         )
 
         ttk.Label(left, text="Texto secundario:").pack(anchor="w", pady=(8, 2))
-        self.txt_secundario = scrolledtext.ScrolledText(left, height=6, wrap=tk.WORD, fg="#A9A9A9")
+        self.txt_secundario = scrolledtext.ScrolledText(left, height=4, wrap=tk.WORD, fg="#A9A9A9")
         self.txt_secundario.bind("<Button-1>", self._clear_text_on_click)
         self.txt_secundario.pack(fill=tk.X)
         self.txt_secundario.insert(tk.END,
@@ -571,9 +557,9 @@ class AppBoletin(tk.Tk):
         self.lbl_recom_icon = ttk.Label(self.frame_recom)
         self.lbl_recom_icon.pack(side=tk.RIGHT, padx=6, pady=4)
 
-        self.txt_recomendaciones = scrolledtext.ScrolledText(left, height=10, wrap=tk.WORD, fg="#A9A9A9")
+        self.txt_recomendaciones = scrolledtext.ScrolledText(left, height=5, wrap=tk.WORD, fg="#A9A9A9")
         self.txt_recomendaciones.bind("<Button-1>", self._clear_text_on_click)
-        self.txt_recomendaciones.pack(fill=tk.BOTH, expand=True)
+        self.txt_recomendaciones.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
         self.txt_recomendaciones.insert(tk.END,
             "✅Ante los bloqueos reportados en diferentes puntos de la ciudad, como la Carrera 7 con Calle 45 "
             "y la Av. Guayacanes con Calle 38 Sur, las autoridades emiten las siguientes recomendaciones:\n\n"
@@ -596,7 +582,7 @@ class AppBoletin(tk.Tk):
 
         self.lbl_right_title = ttk.Label(right, text="Quick Alert", font=self.font_title,
                                          anchor="center", foreground="#FFFFFF")
-        self.lbl_right_title.grid(row=0, column=0, pady=(5, 10))
+        self.lbl_right_title.grid(row=0, column=0, pady=(5, 10), sticky="ew")
 
         self._selector_vertical(right, "Cabezote (JPG):", self.var_cabezote, 1)
         self._selector_vertical(right, "Imagen evidencia (PNG/JPG):", self.var_evidencia, 2)
@@ -782,7 +768,10 @@ class AppBoletin(tk.Tk):
             # =============================================
             # 2. Captura de datos desde la interfaz
             # =============================================
-            fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")   # FECHA REAL SQL
+            # Fecha y hora en formato compatible con SQL
+            fecha_completa = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            fecha_sola = datetime.now().strftime("%Y-%m-%d")
+            hora_sola = datetime.now().strftime("%H:%M:%S")
             ubicacion = self.var_ubicacion.get()
             titulo = self.var_titulo.get()
 
@@ -816,8 +805,11 @@ class AppBoletin(tk.Tk):
             texto_principal = self.txt_principal.get("1.0", "end-1c")
             impacto = self.var_impacto.get()
             numero_boletin = self.var_boletin.get()
+            departamento = self.var_departamento.get()
             ciudad = self.var_ciudad.get()
-            municipio = self.var_municipio.get()
+            riesgo = self.var_riesgo.get()
+
+
 
             # =============================================
             # 3. Inserción de datos
@@ -825,26 +817,32 @@ class AppBoletin(tk.Tk):
             cursor.execute("""
                 INSERT INTO HISTORICO_QUICK_ALERT (
                     fecha,
+                    fecha_sola,
+                    hora_sola,
                     ubicacion,
                     titulo,
                     nombre_cabezote,
                     texto_principal,
                     impacto,
                     numero_boletin,
+                    departamento,
                     ciudad,
-                    municipio
+                    riesgo
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                fecha,
+                fecha_completa,
+                fecha_sola,
+                hora_sola,
                 ubicacion,
                 titulo,
                 nombre_cabezote,
                 texto_principal,
                 impacto,
                 numero_boletin,
+                departamento,
                 ciudad,
-                municipio
+                riesgo
             ))
 
             conn.commit()
@@ -882,7 +880,10 @@ class AppBoletin(tk.Tk):
         slide = prs.slides.add_slide(prs.slide_layouts[6])
 
         slide.shapes.add_picture(self.var_cabezote.get(), Cm(0), Cm(0), Cm(38.1), Cm(17.64))
-        add_simple_text(slide, 2, 18.64, 34, 1.56, f"Bogotá, {fecha_formateada}", 30)
+        add_simple_text(slide, 2, 18.64, 34, 1.56,
+                f"{self.var_departamento.get()}, {self.var_ciudad.get()}, {fecha_formateada}",
+                25)
+
 
         if self.var_icono_boletin.get():
             slide.shapes.add_picture(self.var_icono_boletin.get(), Cm(27.5), Cm(18.64), Cm(1.5), Cm(1.5))

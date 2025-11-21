@@ -46,6 +46,7 @@ python -m PyInstaller --noconfirm --onefile --windowed ^
  --add-data "CABEZOTES;CABEZOTES" ^
  --add-data "EVIDENCIAS;EVIDENCIAS" ^
  --add-data "QUICK ALERT;QUICK ALERT" ^
+ --add-data "departamentos_ciudades.json;." ^
  quick_alert.py
 
 if %errorlevel% neq 0 (
